@@ -39,12 +39,10 @@ public class GamePlayState extends BasicGameState {
 	private int score = 0;
 	
 	/*
-	 * Keyboard control timers
+	 * Timers
 	 */
 	private static final int PIECE_FALL_DELAY = 300;
 	private int pieceFallTimer;
-	private static final int SOFT_DROP_DELAY = 50;
-	private int softDropTimer;
 	
 	/*
 	 * Rendering related
@@ -63,6 +61,8 @@ public class GamePlayState extends BasicGameState {
 	private static final int LINE_FADE_DURATION = 300;
 	private int lineFadeTimer;
 	private float lineFadeAlpha = 1.0f;
+
+	private KeyboardInputComponent inputComponent;
 	
 	GamePlayState(int stateID) {
 		this.stateID = stateID;
@@ -76,10 +76,12 @@ public class GamePlayState extends BasicGameState {
 	@Override
 	public void init(GameContainer gc, StateBasedGame game)
 			throws SlickException {
+		inputComponent = new KeyboardInputComponent(this);
+		gc.getInput().addKeyListener(inputComponent);
+		
 		currentState = State.NEW_PIECE;
 		pit = new Pit();
 		pieceFallTimer = PIECE_FALL_DELAY;
-		softDropTimer = SOFT_DROP_DELAY;
 		lineFadeTimer = LINE_FADE_DURATION;
 		
 		background = new Image("data/background.png");
@@ -153,61 +155,35 @@ public class GamePlayState extends BasicGameState {
 			break;
 		}
 	}
-
-	@Override
-	public void keyPressed(int key, char c) {
-		if (currentState != State.MOVING_PIECE)
-			return;
-		switch (key) {
-		case Input.KEY_LEFT:
-			moveHorizontal(-1);
-			break;
-		case Input.KEY_RIGHT:
-			moveHorizontal(1);
-			break;
-		case Input.KEY_Z:
-			rotatePiece(-1);
-			break;
-		case Input.KEY_UP:
-		case Input.KEY_X:
-			rotatePiece(1);
-			break;
-		case Input.KEY_SPACE:
-			hardDrop();
-			break;
-		}
-	};
 	
 	private void updatePiece(Input input, int delta) {
-		if (input.isKeyDown(Input.KEY_DOWN)) {
-			softDropTimer -= delta;
-			if (softDropTimer <= 0) {
-				movePieceDown();
-				score += 1;
-				softDropTimer = SOFT_DROP_DELAY;
-			}
-		} else {
-			pieceFallTimer -= delta;
-			if (pieceFallTimer <= 0) {
-				movePieceDown();
-				pieceFallTimer = PIECE_FALL_DELAY;
-			}
+		inputComponent.update(input, delta);
+		
+		pieceFallTimer -= delta;
+		if (pieceFallTimer <= 0) {
+			movePieceDown();
+			pieceFallTimer = PIECE_FALL_DELAY;
 		}
 	}
 	
-	private void movePieceDown() {
+	/**
+	 * @return true if the piece could move down
+	 */
+	private boolean movePieceDown() {
 		if (pit.canPutPieceAt(currentPiece, currentPiecePos.add(0, 1))) {
 			currentPiecePos = currentPiecePos.add(0, 1);
+			return true;
 		} else {
 			releaseCurrentPiece();
 			currentState = State.FULL_LINE_CHECK;
+			return false;
 		}
 	}
 	
 	/**
 	 * @param side -1 for left, +1 for right
 	 */
-	private void moveHorizontal(int side) {
+	public void movePieceHorizontal(int side) {
 		assert side == -1 || side == 1 : "-1 or 1";
 		Tuple newPos = currentPiecePos.add(side, 0);
 		
@@ -218,22 +194,22 @@ public class GamePlayState extends BasicGameState {
 	/**
 	 * @param side -1 for left, +1 for right
 	 */
-	private void rotatePiece(int side) {
+	public void rotatePiece(int side) {
 		assert side == -1 || side == 1 : "-1 or 1";
 		currentPiece.rotate(side);
 		if (!pit.canPutPieceAt(currentPiece, currentPiecePos))
 			currentPiece.rotate(-side); // rotate back
 	}
 	
-	private void hardDrop() {
-		int linesDroped = 0;
-		while (pit.canPutPieceAt(currentPiece, currentPiecePos.add(0, 1))) {
-			currentPiecePos = currentPiecePos.add(0, 1);
-			linesDroped++;
+	public void softDrop() {
+		if (movePieceDown())
+			score += 1;
+	}
+	
+	public void hardDrop() {
+		while (movePieceDown()) {
+			score += 2;
 		}
-		releaseCurrentPiece();
-		
-		score += 2 * linesDroped;
 	}
 
 	private void releaseCurrentPiece() {
@@ -301,5 +277,9 @@ public class GamePlayState extends BasicGameState {
 			currentState = State.DESTROY_LINES;
 			lineFadeAlpha = 1.0f;
 		}
+	}
+
+	public boolean isAcceptingCommands() {
+		return currentState == State.MOVING_PIECE;
 	}
 }
