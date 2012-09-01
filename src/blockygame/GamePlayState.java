@@ -41,7 +41,7 @@ public class GamePlayState extends BasicGameState {
 	/*
 	 * Timers
 	 */
-	private static final int PIECE_FALL_DELAY = 300;
+	private static final int PIECE_FALL_DELAY = 400;
 	private int pieceFallTimer;
 	
 	/*

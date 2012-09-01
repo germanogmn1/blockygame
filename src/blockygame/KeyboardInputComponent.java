@@ -11,6 +11,11 @@ public class KeyboardInputComponent implements KeyListener {
 	
 	private static final int SOFT_DROP_DELAY = 50;
 	private int softDropTimer;
+	
+	private static final int HORIZONTAL_DELAY_FIRST = 300;
+	private static final int HORIZONTAL_DELAY_AFTER = 100;
+	private boolean holdingMove;
+	private int horizontalTimer;
 
 	public KeyboardInputComponent(GamePlayState game) {
 		this.game = game;
@@ -23,6 +28,7 @@ public class KeyboardInputComponent implements KeyListener {
 	}
 
 	public void update(Input input, int delta) {
+		// Soft drop
 		if (input.isKeyDown(Input.KEY_DOWN)) {
 			softDropTimer -= delta;
 			if (softDropTimer <= 0) {
@@ -30,27 +36,42 @@ public class KeyboardInputComponent implements KeyListener {
 				softDropTimer = SOFT_DROP_DELAY;
 			}
 		}
+		
+		// Horizontal move
+		int side = 0;
+		if (input.isKeyDown(Input.KEY_RIGHT)) side++;
+		if (input.isKeyDown(Input.KEY_LEFT)) side--;
+		if (side != 0) {
+			horizontalTimer -= delta;
+			if (horizontalTimer <= 0) {
+				game.movePieceHorizontal(side);
+				if (!holdingMove) {
+					horizontalTimer = HORIZONTAL_DELAY_FIRST;
+					holdingMove = true;
+				} else {
+					horizontalTimer = HORIZONTAL_DELAY_AFTER;
+				}
+			}
+		} else {
+			horizontalTimer = 0;
+			holdingMove = false;
+		}
+		
 	}
 	
 	@Override
 	public void keyPressed(int key, char c) {
 		switch (key) {
-		case Input.KEY_LEFT:
-			game.movePieceHorizontal(-1);
-			break;
-		case Input.KEY_RIGHT:
-			game.movePieceHorizontal(1);
-			break;
 		case Input.KEY_Z:
 			game.rotatePiece(-1);
-			break;
+			return;
 		case Input.KEY_UP:
 		case Input.KEY_X:
 			game.rotatePiece(1);
-			break;
+			return;
 		case Input.KEY_SPACE:
 			game.hardDrop();
-			break;
+			return;
 		}
 	}
 	
