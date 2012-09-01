@@ -1,0 +1,14 @@
+
+
+
+
+
+java.util.List<Integer> l = new java.util.ArrayList<Integer>();
+l.add(5);
+l.add(10);
+
+System.out.println(l.contains(7));
+
+
+
+
