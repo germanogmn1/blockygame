@@ -1,31 +1,21 @@
 package blockygame;
 
-import java.awt.Font;
 import java.util.*;
 
-import org.newdawn.slick.Color;
 import org.newdawn.slick.GameContainer;
 import org.newdawn.slick.Graphics;
-import org.newdawn.slick.Image;
 import org.newdawn.slick.Input;
 import org.newdawn.slick.SlickException;
-import org.newdawn.slick.TrueTypeFont;
 import org.newdawn.slick.state.BasicGameState;
 import org.newdawn.slick.state.StateBasedGame;
 
-import blockygame.Piece.PieceID;
 import blockygame.util.Tuple;
 
 public class GamePlayState extends BasicGameState {	
 	int stateID = -1;
 	
 	private enum State {
-		NEW_PIECE,
-		MOVING_PIECE,
-		FULL_LINE_CHECK,
-		LINE_DESTRUCTION_FX,
-		DESTROY_LINES,
-		GAME_OVER
+		NEW_PIECE, MOVING_PIECE, FULL_LINE_CHECK, LINE_DESTRUCTION_FX, DESTROY_LINES, GAME_OVER
 	}
 	
 	private State currentState;
@@ -34,35 +24,31 @@ public class GamePlayState extends BasicGameState {
 	 * Game logic state
 	 */
 	private Pit pit;
+	private Piece nextPiece;
 	private Piece currentPiece;
 	private Tuple currentPiecePos;
-	private int score = 0;
+	
+	private long score = 0;
+	private int totalLines = 0;
+	private int level = 1;
+	private int combo = 0;
 	
 	/*
 	 * Timers
 	 */
-	private static final int PIECE_FALL_DELAY = 400;
-	private int pieceFallTimer;
-	
-	/*
-	 * Rendering related
-	 */
-	private static final Tuple PIT_ORIGIN = new Tuple(280, 60);
-	private static final Tuple BLOCK_SIZE = new Tuple(24, 24);
-	private Map<PieceID, Image> pieceBlocks;
-	private Image pitBackground;
-	private Image background;
-	private List<Integer> linesDestroyed = new ArrayList<Integer>();
-	private TrueTypeFont scoreFont;
+	private static final int FALL_DELAY = 500;
+	private int currentFallDelay = FALL_DELAY;
+	private int fallTimer;
 	
 	/*
 	 * Line fading effect
 	 */
-	private static final int LINE_FADE_DURATION = 300;
+	private List<Integer> linesBeingDestroyed = new ArrayList<Integer>();
+	private static final int LINE_FADE_DURATION = 400;
 	private int lineFadeTimer;
-	private float lineFadeAlpha = 1.0f;
 
 	private KeyboardInputComponent inputComponent;
+	private GraphicsComponent graphicsComponent;
 	
 	GamePlayState(int stateID) {
 		this.stateID = stateID;
@@ -74,65 +60,28 @@ public class GamePlayState extends BasicGameState {
 	}
 	
 	@Override
-	public void init(GameContainer gc, StateBasedGame game)
+	public void init(GameContainer container, StateBasedGame game)
 			throws SlickException {
 		inputComponent = new KeyboardInputComponent(this);
-		gc.getInput().addKeyListener(inputComponent);
+		container.getInput().addKeyListener(inputComponent);
+		
+		graphicsComponent = new GraphicsComponent(this);
 		
 		currentState = State.NEW_PIECE;
 		pit = new Pit();
-		pieceFallTimer = PIECE_FALL_DELAY;
 		lineFadeTimer = LINE_FADE_DURATION;
-		
-		background = new Image("data/background.png");
-		pitBackground = new Image("data/pit_bg.png");
-		scoreFont = new TrueTypeFont(new Font("data/imagine_font.ttf", Font.PLAIN, 48), false);
-		
-		pieceBlocks = new HashMap<PieceID, Image>();
-		
-		for (PieceID id : PieceID.values())
-			pieceBlocks.put(id, new Image("data/blocks/"+id+".png"));
 	}
 	
 	@Override
 	public void render(GameContainer container, StateBasedGame game, Graphics graphics)
 			throws SlickException {
-		background.draw(0, 0);
-		pitBackground.draw(PIT_ORIGIN.x - 12, PIT_ORIGIN.y - 12);
-		
-		scoreFont.drawString(100,  100, "Score: "+String.valueOf(score));
-		
-		// Draw current piece
-		if (currentPiece != null) {
-			for (int i = 0; i < 4; i++) {
-				Tuple block = currentPiecePos.add(currentPiece.getPositionOfBlock(i));
-				int x = PIT_ORIGIN.x + (block.x * BLOCK_SIZE.x);
-				int y = PIT_ORIGIN.y + (block.y * BLOCK_SIZE.x);
-				pieceBlocks.get(currentPiece.getId()).draw(x, y);
-			}
-		}
-		
-		// Draw pit
-		int x = PIT_ORIGIN.x, y = PIT_ORIGIN.y;
-		for (int lineIdx = 0; lineIdx < Pit.HEIGHT; lineIdx++) {
-			for (PieceID id : pit.getLine(lineIdx)) {
-				if (id != null) {
-					if (linesDestroyed.contains(lineIdx)) {
-						pieceBlocks.get(id).draw(x, y, new Color(1.0f, 1.0f, 1.0f, lineFadeAlpha));
-					} else {
-						pieceBlocks.get(id).draw(x, y);
-					}
-				}
-				x += BLOCK_SIZE.x;
-			}
-			x = PIT_ORIGIN.x;
-			y += BLOCK_SIZE.y;
-		}
+		graphicsComponent.render(graphics);
 	}
 
 	@Override
 	public void update(GameContainer container, StateBasedGame game, int delta)
 			throws SlickException {
+		graphicsComponent.update(delta);
 		switch (currentState) {
 		case NEW_PIECE:
 			createNewPiece();
@@ -159,10 +108,10 @@ public class GamePlayState extends BasicGameState {
 	private void updatePiece(Input input, int delta) {
 		inputComponent.update(input, delta);
 		
-		pieceFallTimer -= delta;
-		if (pieceFallTimer <= 0) {
+		fallTimer -= delta;
+		if (fallTimer <= 0) {
 			movePieceDown();
-			pieceFallTimer = PIECE_FALL_DELAY;
+			fallTimer = currentFallDelay;
 		}
 	}
 	
@@ -183,7 +132,7 @@ public class GamePlayState extends BasicGameState {
 	/**
 	 * @param side -1 for left, +1 for right
 	 */
-	public void movePieceHorizontal(int side) {
+	void movePieceHorizontal(int side) {
 		assert side == -1 || side == 1 : "-1 or 1";
 		Tuple newPos = currentPiecePos.add(side, 0);
 		
@@ -194,19 +143,19 @@ public class GamePlayState extends BasicGameState {
 	/**
 	 * @param side -1 for left, +1 for right
 	 */
-	public void rotatePiece(int side) {
+	void rotatePiece(int side) {
 		assert side == -1 || side == 1 : "-1 or 1";
 		currentPiece.rotate(side);
 		if (!pit.canPutPieceAt(currentPiece, currentPiecePos))
 			currentPiece.rotate(-side); // rotate back
 	}
 	
-	public void softDrop() {
+	void softDrop() {
 		if (movePieceDown())
 			score += 1;
 	}
 	
-	public void hardDrop() {
+	void hardDrop() {
 		while (movePieceDown()) {
 			score += 2;
 		}
@@ -216,12 +165,18 @@ public class GamePlayState extends BasicGameState {
 		pit.addPieceAt(currentPiece, currentPiecePos);
 		
 		currentPiece = null;
-		pieceFallTimer = PIECE_FALL_DELAY;
+		fallTimer = currentFallDelay;
 		currentState = State.FULL_LINE_CHECK;
 	}
 	
 	private void createNewPiece() {
-		currentPiece = PieceFactory.makeRandomPiece();
+		if (nextPiece == null) {
+			currentPiece = PieceFactory.makeRandomPiece();
+		} else {
+			currentPiece = nextPiece;
+		}
+		nextPiece = PieceFactory.makeRandomPiece();
+		
 		currentPiecePos = Pit.SPAWN_POSITION;
 		
 		if (!pit.canPutPieceAt(currentPiece, currentPiecePos)) {
@@ -236,50 +191,126 @@ public class GamePlayState extends BasicGameState {
 		for (int i = 0; i < Pit.HEIGHT; i++) {
 			if (pit.isLineFull(i)) {
 				linesCleared++;
-				linesDestroyed.add(i);
+				linesBeingDestroyed.add(i);
 			}
 		}
-		assert linesCleared <= 4 : linesCleared;
 		
+		computeLineClear(linesCleared);
+		currentState = (linesCleared == 0) ? State.NEW_PIECE : State.LINE_DESTRUCTION_FX;
+	}
+
+	private void computeLineClear(int linesCleared) {
+		assert linesCleared >= 0 && linesCleared <= 4 : linesCleared;
+		
+		if (linesCleared == 0) {
+			combo = 0;
+			return;
+		}
+		
+		totalLines += linesCleared;
+		
+		int lineScore = 0;
+		String msg = "";
 		switch (linesCleared) {
 		case 1:
-			score += 100;
+			lineScore = 100;
+			msg = "Single";
 			break;
 		case 2:
-			score += 300;
+			lineScore = 300;
+			msg = "Double";
 			break;
 		case 3:
-			score += 500;
+			lineScore = 500;
+			msg = "Triple";
 			break;
 		case 4:
-			score += 800;
+			lineScore = 800;
+			msg = "Tetris";
 			break;
 		}
 		
-		currentState = (linesCleared == 0) ? State.NEW_PIECE : State.LINE_DESTRUCTION_FX;
+		lineScore *= level;
+		score += lineScore;
+		
+		graphicsComponent.addMessage(msg+" +"+lineScore);
+		
+		checkLevelUp();
+		
+		if (combo > 0) {
+			int comboScore = combo * 50 * getLevel();
+			if (combo == 1)
+				graphicsComponent.addMessage("Combo +"+comboScore);
+			else
+				graphicsComponent.addMessage(combo+"x Combo +"+comboScore);
+		}
+		
+		combo++;
+	}
+
+	private void checkLevelUp() {
+		if (totalLines / 5 > (level - 1)) {
+			level++;
+			graphicsComponent.addMessage("Level Up!");
+			currentFallDelay *= 0.9;
+		}
 	}
 	
 	private void destroyLines(int delta) {
-		for (int line : linesDestroyed) {
+		for (int line : linesBeingDestroyed) {
 			pit.eraseLine(line);
 		}
-		linesDestroyed.clear();
+		linesBeingDestroyed.clear();
 		currentState = State.NEW_PIECE;
 	}
 	
+	// Delay until the effect is finished
 	private void lineDestructionEffect(int delta) {
 		lineFadeTimer -= delta;
 		
-		if (lineFadeTimer > 0) {
-			lineFadeAlpha = (float) lineFadeTimer / (float) LINE_FADE_DURATION;
-		} else {
+		if (lineFadeTimer <= 0) {
 			lineFadeTimer = LINE_FADE_DURATION;
 			currentState = State.DESTROY_LINES;
-			lineFadeAlpha = 1.0f;
 		}
 	}
-
-	public boolean isAcceptingCommands() {
+	
+	float getLineEffectStage() {
+		return (float) lineFadeTimer / (float) LINE_FADE_DURATION;
+	}
+	
+	boolean isAcceptingCommands() {
 		return currentState == State.MOVING_PIECE;
+	}
+
+	long getScore() {
+		return score;
+	}
+	
+	int getLevel() {
+		return level;
+	}
+	
+	int getTotalLines() {
+		return totalLines;
+	}
+
+	Piece getCurrentPiece() {
+		return currentPiece;
+	}
+	
+	Piece getNextPiece() {
+		return nextPiece;
+	}
+	
+	Tuple getCurrentPiecePos() {
+		return currentPiecePos;
+	}
+	
+	Pit getPit() {
+		return pit;
+	}
+	
+	List<Integer> getLinesBeingDestroyed() {
+		return linesBeingDestroyed;
 	}
 }

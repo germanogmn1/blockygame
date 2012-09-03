@@ -12,8 +12,8 @@ public class KeyboardInputComponent implements KeyListener {
 	private static final int SOFT_DROP_DELAY = 50;
 	private int softDropTimer;
 	
-	private static final int HORIZONTAL_DELAY_FIRST = 300;
-	private static final int HORIZONTAL_DELAY_AFTER = 100;
+	private static final int HORIZONTAL_DELAY_FIRST = 250;
+	private static final int HORIZONTAL_DELAY_AFTER = 60;
 	private boolean holdingMove;
 	private int horizontalTimer;
 

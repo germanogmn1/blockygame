@@ -1,14 +1,11 @@
+java.util.Map<String, Float> msf = new java.util.LinkedHashMap<String, Float>();
+msf.put("1", 2.5f);
+msf.put("2", 1.5f);
+msf.put("3", 1.5f);
+msf.put("4", 1.5f);
+msf.put("5", 1.5f);
 
-
-
-
-
-java.util.List<Integer> l = new java.util.ArrayList<Integer>();
-l.add(5);
-l.add(10);
-
-System.out.println(l.contains(7));
-
-
-
-
+for (java.util.Map.Entry e : msf.entrySet()) {
+	System.out.println(e.getKey());
+}
+	

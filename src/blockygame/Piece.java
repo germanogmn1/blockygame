@@ -44,5 +44,19 @@ public class Piece {
 		
         return rotations[currentRotation][blockNumber];
     }
+
+	public int getWidth() {
+		int min = 0, max = 0;
+		
+		for (int i = 0; i < 4; i++) {
+			Tuple pos = getPositionOfBlock(i);
+			if (pos.x > max)
+				max = pos.x;
+			if (pos.x < min)
+				min = pos.x;
+		}
+		
+		return max - min + 1;
+	}
 	
 }

@@ -7,7 +7,7 @@ import blockygame.util.Tuple;
 
 public class Pit implements Iterable<PieceID[]> {
 	public static final int WIDTH = 10;
-	public static final int HEIGHT = 20;
+	public static final int HEIGHT = 22;
 	public static final Tuple SPAWN_POSITION = new Tuple(4, 2);
 	
 	private List<PieceID[]> pit;
